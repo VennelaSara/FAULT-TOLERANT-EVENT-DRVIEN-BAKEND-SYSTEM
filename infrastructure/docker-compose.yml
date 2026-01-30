@@ -1,0 +1,103 @@
+version: "3.9"
+
+services:
+  zookeeper:
+    image: wurstmeister/zookeeper:3.4.6
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+
+  kafka:
+    image: wurstmeister/kafka:2.12-2.7.0
+    container_name: kafka
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    depends_on:
+      - zookeeper
+
+  redis:
+    image: redis:7
+    container_name: redis
+    ports:
+      - "6379:6379"
+
+  order_postgres:
+    image: postgres:15
+    container_name: order_postgres
+    environment:
+      POSTGRES_USER: order_user
+      POSTGRES_PASSWORD: order_pass
+      POSTGRES_DB: order_db
+    ports:
+      - "5432:5432"
+
+  payment_postgres:
+    image: postgres:15
+    container_name: payment_postgres
+    environment:
+      POSTGRES_USER: payment_user
+      POSTGRES_PASSWORD: payment_pass
+      POSTGRES_DB: payment_db
+    ports:
+      - "5433:5432"
+
+  shipping_postgres:
+    image: postgres:15
+    container_name: shipping_postgres
+    environment:
+      POSTGRES_USER: shipping_user
+      POSTGRES_PASSWORD: shipping_pass
+      POSTGRES_DB: shipping_db
+    ports:
+      - "5434:5432"
+
+  order_service:
+    build: ./services/order_service
+    container_name: order_service
+    depends_on:
+      - kafka
+      - redis
+      - order_postgres
+    environment:
+      POSTGRES_HOST: order_postgres
+      REDIS_HOST: redis
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+
+  payment_service:
+    build: ./services/payment_service
+    container_name: payment_service
+    depends_on:
+      - kafka
+      - redis
+      - payment_postgres
+    environment:
+      POSTGRES_HOST: payment_postgres
+      REDIS_HOST: redis
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+
+  shipping_service:
+    build: ./services/shipping_service
+    container_name: shipping_service
+    depends_on:
+      - kafka
+      - redis
+      - shipping_postgres
+    environment:
+      POSTGRES_HOST: shipping_postgres
+      REDIS_HOST: redis
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+
+  prometheus:
+    build: ./infrastructure/prometheus
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    depends_on:
+      - order_service
+      - payment_service
+      - shipping_service
